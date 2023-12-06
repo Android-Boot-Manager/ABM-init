@@ -23,9 +23,9 @@ void log_and_print(const char *format, ...) {
     // Print to kernel log if possible
     if(can_log) {
         // Open /dev/kmsg for writing
-        int fd = open("/dev/kmsg", O_WRONLY | O_APPEND);
+        int fd = open("/dev_abm/kmsg", O_WRONLY | O_APPEND);
         if (fd != -1) {
-            // Write the buffer to /dev/kmsg
+            // Write the buffer to /dev_abm/kmsg
             write(fd, buffer, strlen(buffer));
 
             // Close the file descriptor
@@ -45,14 +45,14 @@ int main(void)
 {
     int err = 0;
 
-    err = mount("tmpfs", "/dev", "tmpfs", MS_NOSUID, "mode=0755");
+    err = mount("tmpfs", "/dev_abm", "tmpfs", MS_NOSUID, "mode=0755");
     if(err!=0) {
-        log_and_print("Failed to mount /dev, we are so done :(");
+        log_and_print("Failed to mount /dev_abm, we are so done :(");
     }
 
-    err = mknod("/dev/kmsg", S_IFCHR | 0600, makedev(1, 11));
+    err = mknod("/dev_abm/kmsg", S_IFCHR | 0600, makedev(1, 11));
     if(err!=0) {
-        log_and_print("Failed to create /dev/kmsg, we are so done :(");
+        log_and_print("Failed to create /dev_abm/kmsg, we are so done :(");
     }
 
     // As we now have kmsg we can log to it, so allow logging
