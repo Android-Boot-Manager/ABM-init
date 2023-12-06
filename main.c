@@ -44,6 +44,19 @@ void log_and_print(const char *format, ...) {
     va_end(args);
 }
 
+void create_symlink(const char *partition, const char *name) {
+    char linkpath[256];
+    sprintf(linkpath, "/dev_abm/by-name/%s", name);
+
+    if (symlink(partition, linkpath) < 0) {
+        log_and_print("Failed to create symlink: %s -> %s\n", linkpath, partition);
+    } else {
+#ifdef DEBUG
+        log_and_print("Created symlink: %s -> %s\n", linkpath, partition);
+#endif
+    }
+}
+
 void create_device_node(const char *devpath, int major, int minor) {
     if (mknod(devpath, S_IFBLK | 0666, makedev(major, minor)) < 0) {
         log_and_print("mknod error");
@@ -54,15 +67,16 @@ void create_device_node(const char *devpath, int major, int minor) {
     }
 }
 
-void process_device(const char *devname) {
-    char sys_path[276], devpath[276], part_path[256];
-    int major, minor;
+void process_partition(const char *devname, const char *partition) {
+    char sys_path[276], devpath[276], uevent_path[256], line[256], partname[239];
     FILE *fp;
+    int major, minor;
 
-    // Process main block device
-    sprintf(sys_path, "/sys_abm/block/%s/dev", devname);
-    sprintf(devpath, "/dev_abm/%s", devname);
+    sprintf(sys_path, "/sys_abm/block/%s/%s/dev", devname, partition);
+    sprintf(devpath, "/dev_abm/%s", partition);
+    sprintf(uevent_path, "/sys_abm/block/%s/%s/uevent", devname, partition);
 
+    // Create device node
     fp = fopen(sys_path, "r");
     if (!fp) {
         log_and_print("Error opening device file");
@@ -71,12 +85,27 @@ void process_device(const char *devname) {
 
     if (fscanf(fp, "%d:%d", &major, &minor) == 2) {
         create_device_node(devpath, major, minor);
-    } else {
-        log_and_print("Error reading major and minor numbers, %d:%d", major, minor);
     }
     fclose(fp);
 
-    // Process partitions
+    // Check for partition name and create symlink
+    fp = fopen(uevent_path, "r");
+    if (!fp) {
+        log_and_print("Error opening device file");
+        return;
+    }
+
+    while (fgets(line, sizeof(line), fp)) {
+        if (sscanf(line, "PARTNAME=%s", partname) == 1) {
+            create_symlink(devpath, partname);
+            break;
+        }
+    }
+    fclose(fp);
+}
+
+void process_device(const char *devname) {
+    char part_path[256];
     sprintf(part_path, "/sys_abm/block/%s", devname);
     DIR *dir = opendir(part_path);
     if (!dir) return;
@@ -84,20 +113,12 @@ void process_device(const char *devname) {
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
         if (entry->d_type == DT_DIR && strncmp(entry->d_name, devname, strlen(devname)) == 0) {
-            sprintf(sys_path, "/sys_abm/block/%s/%s/dev", devname, entry->d_name);
-            sprintf(devpath, "/dev_abm/%s", entry->d_name);
-
-            fp = fopen(sys_path, "r");
-            if (!fp) continue;
-
-            if (fscanf(fp, "%d:%d", &major, &minor) == 2) {
-                create_device_node(devpath, major, minor);
-            }
-            fclose(fp);
+            process_partition(devname, entry->d_name);
         }
     }
     closedir(dir);
 }
+
 int setup_block_device_nodes()
 {
     struct dirent *dp;
@@ -106,6 +127,10 @@ int setup_block_device_nodes()
     if ((dfd = opendir("/sys_abm/block")) == NULL) {
         log_and_print("Can't open /sys_abm/block");
         return 1;
+    }
+
+    if (mkdir("/dev_abm/by-name", 0755) < 0) {
+        log_and_print(" Failed to mkdir /dev_abm/by-name");
     }
 
     while ((dp = readdir(dfd)) != NULL) {
