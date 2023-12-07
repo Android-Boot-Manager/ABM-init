@@ -12,9 +12,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifndef DEBUG
 #define DEBUG 1
+#endif
 
-bool can_log = false;
+static bool can_log = false;
 
 void log_and_print(const char *format, ...) {
     va_list args;
@@ -50,21 +52,23 @@ void create_symlink(const char *partition, const char *name) {
 
     if (symlink(partition, linkpath) < 0) {
         log_and_print("Failed to create symlink: %s -> %s\n", linkpath, partition);
-    } else {
-#ifdef DEBUG
-        log_and_print("Created symlink: %s -> %s\n", linkpath, partition);
-#endif
     }
+#ifdef DEBUG
+    else {
+        log_and_print("Created symlink: %s -> %s\n", linkpath, partition);
+    }
+#endif
 }
 
 void create_device_node(const char *devpath, int major, int minor) {
     if (mknod(devpath, S_IFBLK | 0666, makedev(major, minor)) < 0) {
         log_and_print("mknod error");
-    } else {
-#ifdef DEBUG
-        log_and_print("Created device node: %s\n", devpath);
-#endif
     }
+#ifdef DEBUG
+    else {
+        log_and_print("Created device node: %s\n", devpath);
+    }
+#endif
 }
 
 void process_partition(const char *devname, const char *partition) {
@@ -144,20 +148,25 @@ int setup_block_device_nodes()
     return 0;
 }
 
+int end(int ret) {
+    execl("/init1", "/init1", (char *)NULL);
+    return ret ? : 0;
+}
+
 int main(void)
 {
-    int err = 0;
+    int err;
 
     err = mount("tmpfs", "/dev_abm", "tmpfs", MS_NOSUID, "mode=0755");
     if(err!=0) {
         log_and_print("Failed to mount /dev_abm, we are so done :(");
-        goto end;
+        return end(-1);
     }
 
     err = mknod("/dev_abm/kmsg", S_IFCHR | 0600, makedev(1, 11));
     if(err!=0) {
         log_and_print("Failed to create /dev_abm/kmsg, we are so done :(");
-        goto end;
+        return end(-1);
     }
 
     // As we now have kmsg we can log to it, so allow logging
@@ -168,15 +177,12 @@ int main(void)
     err = mount("sysfs", "/sys_abm", "sysfs", MS_NOSUID, "mode=0755");
     if(err!=0) {
         log_and_print("Failed to mount /sys_abm, we are so done");
-        goto end;
+        return end(-1);
     }
 
     err = setup_block_device_nodes();
     if(err!=0) {
         log_and_print("Failed to create block device nodes");
+        return end(-1);
     }
-
-end:
-    execl("/init1", "/init1", (char *)NULL);
-    return 0;
 }
