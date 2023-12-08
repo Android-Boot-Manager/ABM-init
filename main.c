@@ -203,6 +203,11 @@ int main(void)
     }
     fclose(fp);
 
+    // Unmount dev sys and proc, else android wount boot
+    umount("/dev_abm");
+    umount("/sys_abm");
+    umount("/proc_abm");
+
 end:
     execl("/init1", "/init1", (char *)NULL);
     return 0;
