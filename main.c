@@ -1,5 +1,7 @@
 #include <unistd.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <stdarg.h>
 #include <pthread.h>
 #include <time.h>
@@ -11,6 +13,7 @@
 #include <sys/sysmacros.h>
 #include <stdio.h>
 #include <string.h>
+#include <config.h>
 
 #define DEBUG 1
 
@@ -147,16 +150,21 @@ int setup_block_device_nodes()
 int main(void)
 {
     int err = 0;
+    struct boot_entry *entry = malloc(sizeof(struct boot_entry));
+    FILE *fp;
+    char cmdline[1024];
+    char *token;
+    char *abm_config = NULL;
 
     err = mount("tmpfs", "/dev_abm", "tmpfs", MS_NOSUID, "mode=0755");
     if(err!=0) {
-        log_and_print("Failed to mount /dev_abm, we are so done :(");
+        log_and_print("Failed to mount /dev_abm, we are so done :( err: %d", err);
         goto end;
     }
 
     err = mknod("/dev_abm/kmsg", S_IFCHR | 0600, makedev(1, 11));
     if(err!=0) {
-        log_and_print("Failed to create /dev_abm/kmsg, we are so done :(");
+        log_and_print("Failed to create /dev_abm/kmsg, we are so done :( err: %d", err);
         goto end;
     }
 
@@ -167,14 +175,33 @@ int main(void)
 
     err = mount("sysfs", "/sys_abm", "sysfs", MS_NOSUID, "mode=0755");
     if(err!=0) {
-        log_and_print("Failed to mount /sys_abm, we are so done");
+        log_and_print("Failed to mount /sys_abm, we are so done err: %d", err);
         goto end;
     }
 
     err = setup_block_device_nodes();
     if(err!=0) {
-        log_and_print("Failed to create block device nodes");
+        log_and_print("Failed to create block device nodes err: %d", err);
     }
+
+    err = mount("proc", "/proc_abm", "proc", 0, "gid=3009,hidepid=2");
+    if(err!=0) {
+        log_and_print("Failed to mount /proc_abm, we are so done err: %d", err);
+        goto end;
+    }
+
+    fp = fopen("/proc_abm/cmdline", "r");
+    if (fp == NULL) {
+        log_and_print("Error opening /proc_abm/cmdline");
+        goto end;
+    }
+
+    if (fgets(cmdline, sizeof(cmdline), fp) == NULL) {
+        log_and_print("Error reading /proc/cmdline");
+        fclose(fp);
+        goto end;
+    }
+    fclose(fp);
 
 end:
     execl("/init1", "/init1", (char *)NULL);

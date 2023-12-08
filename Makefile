@@ -3,13 +3,13 @@
 CC ?= gcc
 
 # Compiler flags
-CFLAGS = -Wall -static
+CFLAGS = -Wall -static -Iinclude
 
 # Target binary name
 TARGET = abm-init
 
 # Source files
-SRC = main.c
+SRC = main.c config.c
 
 # Rule to build the binary
 $(TARGET): $(SRC)
