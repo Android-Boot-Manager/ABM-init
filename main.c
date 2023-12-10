@@ -154,7 +154,9 @@ int main(void)
     FILE *fp;
     char cmdline[1024];
     char *token;
-    char *abm_config = NULL;
+    char *abm_config_name = NULL;
+    int abm_config_name_len;
+    char *tmp;
 
     err = mount("tmpfs", "/dev_abm", "tmpfs", MS_NOSUID, "mode=0755");
     if(err!=0) {
@@ -202,6 +204,20 @@ int main(void)
         goto end;
     }
     fclose(fp);
+
+    // tmp would point to begining of actual cong name as strstr will provide pointer to letter A of ABM, we add len of key
+    tmp = strstr(cmdline, "ABM.config=\"") + strlen("ABM.config=\"");
+    if(tmp == NULL) {
+        log_and_print("No ABM.config found");
+        goto end;
+    }
+
+    // Find end of config name by searching for "
+    abm_config_name_len = strlen(tmp) - strlen(strstr(tmp, "\""));
+    abm_config_name = malloc(abm_config_name_len + 1);
+    abm_config_name[abm_config_name_len+1] = "\0";
+    memcpy(abm_config_name, tmp, abm_config_name_len);
+    log_and_print("ABM config name: %s\n", abm_config_name);
 
     // Unmount dev sys and proc, else android wount boot
     umount("/dev_abm");
